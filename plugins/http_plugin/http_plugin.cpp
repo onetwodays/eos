@@ -133,7 +133,11 @@ namespace eosio {
       struct abstract_conn {
          virtual ~abstract_conn() {}
          virtual bool verify_max_bytes_in_flight() = 0;
+         virtual bool verify_max_requests_in_flight() = 0;
          virtual void handle_exception() = 0;
+
+         virtual const void* operator* () const = 0;
+         virtual void* operator* () = 0;
       };
 
       using abstract_conn_ptr = std::shared_ptr<abstract_conn>;
@@ -204,7 +208,9 @@ class http_plugin_impl : public std::enable_shared_from_this<http_plugin_impl> {
          uint16_t                                    thread_pool_size = 2;
          optional<eosio::chain::named_thread_pool>   thread_pool;
          std::atomic<size_t>                         bytes_in_flight{0};
+         std::atomic<int32_t>                        requests_in_flight{0};
          size_t                                      max_bytes_in_flight = 0;
+         int32_t                                     max_requests_in_flight = -1;
          fc::microseconds                            max_response_time{30*1000};
 
          optional<tcp::endpoint>  https_listen_endpoint;
@@ -332,21 +338,42 @@ class http_plugin_impl : public std::enable_shared_from_this<http_plugin_impl> {
          }
 
          template<typename T>
+         void report_429_error( const T& con, string what) {
+            error_results::error_info ei;
+            ei.code = websocketpp::http::status_code::too_many_requests;
+            ei.name = "Busy";
+            ei.what = what;
+            error_results results{websocketpp::http::status_code::too_many_requests, "Busy", ei};
+            con->set_body( fc::json::to_string( results, fc::time_point::maximum() ));
+            con->set_status( websocketpp::http::status_code::too_many_requests );
+            con->send_http_response();
+         }
+
+         template<typename T>
          bool verify_max_bytes_in_flight( const T& con ) {
             auto bytes_in_flight_size = bytes_in_flight.load();
             if( bytes_in_flight_size > max_bytes_in_flight ) {
                fc_dlog( logger, "429 - too many bytes in flight: ${bytes}", ("bytes", bytes_in_flight_size) );
-               error_results::error_info ei;
-               ei.code = websocketpp::http::status_code::too_many_requests;
-               ei.name = "Busy";
-               ei.what = "Too many bytes in flight: " + std::to_string( bytes_in_flight_size );
-               error_results results{websocketpp::http::status_code::too_many_requests, "Busy", ei};
-               con->set_body( fc::json::to_string( results, fc::time_point::maximum() ));
-               con->set_status( websocketpp::http::status_code::too_many_requests );
-               con->send_http_response();
+               string what = "Too many bytes in flight: " + std::to_string( bytes_in_flight_size ) + ". Try again later.";;
+               report_429_error(con, what);
                return false;
             }
 
+            return true;
+         }
+
+         template<typename T>
+         bool verify_max_requests_in_flight( const T& con ) {
+            if (max_requests_in_flight < 0)
+                return true;
+
+            auto requests_in_flight_num = requests_in_flight.load();
+            if( requests_in_flight_num > max_requests_in_flight ) {
+               fc_dlog( logger, "429 - too many requests in flight: ${requests}", ("requests", requests_in_flight_num) );
+               string what = "Too many requests in flight: " + std::to_string( requests_in_flight_num ) + ". Try again later.";
+               report_429_error(con, what);
+               return false;
+            }
             return true;
          }
 
@@ -384,8 +411,28 @@ class http_plugin_impl : public std::enable_shared_from_this<http_plugin_impl> {
                return _impl->verify_max_requests_in_flight(_conn);
             }
 
+            bool verify_max_requests_in_flight() override {
+               return _impl.verify_max_requests_in_flight(_conn);
+            }
+
             void handle_exception()override {
                http_plugin_impl::handle_exception<T>(_conn);
+            }
+
+            /**
+             * const accessor
+             * @return const reference to the contained _conn
+             */
+            const void* operator* () const override {
+               return (const void *) &_conn;
+            }
+
+            /**
+             * mutable accessor (can be moved frmo)
+             * @return mutable reference to the contained _conn
+             */
+            void* operator* () override {
+               return (void *) &_conn;
             }
 
             detail::connection_ptr<T> _conn;
@@ -550,7 +597,7 @@ class http_plugin_impl : public std::enable_shared_from_this<http_plugin_impl> {
                      auto tracked_json = make_in_flight(std::move(json), my);
                      abstract_conn_ptr->send_response(std::move(*(*tracked_json)), code);
                   } catch( ... ) {
-                     handle_exception<T>( con );
+                     abstract_conn_ptr->handle_exception();
                   }
                });
             };
@@ -592,7 +639,7 @@ class http_plugin_impl : public std::enable_shared_from_this<http_plugin_impl> {
                auto handler_itr = url_handlers.find( resource );
                if( handler_itr != url_handlers.end()) {
                   std::string body = con->get_request_body();
-                  handler_itr->second( make_abstract_conn_ptr<T>(con, *this), std::move( resource ), std::move( body ), make_http_response_handler<T>(con) );
+                  handler_itr->second( abstract_conn_ptr, std::move( resource ), std::move( body ), make_http_response_handler<T>(abstract_conn_ptr) );
                } else {
                   fc_dlog( logger, "404 - not found: ${ep}", ("ep", resource) );
                   error_results results{websocketpp::http::status_code::not_found,
@@ -712,6 +759,8 @@ class http_plugin_impl : public std::enable_shared_from_this<http_plugin_impl> {
              "The maximum body size in bytes allowed for incoming RPC requests")
             ("http-max-bytes-in-flight-mb", bpo::value<uint32_t>()->default_value(500),
              "Maximum size in megabytes http_plugin should use for processing http requests. 503 error response when exceeded." )
+            ("http-max-in-flight-requests", bpo::value<int32_t>()->default_value(-1),
+             "Maximum number of requests http_plugin should use for processing http requests. 503 error response when exceeded." )
             ("http-max-response-time-ms", bpo::value<uint32_t>()->default_value(30),
              "Maximum time for processing a request.")
             ("verbose-http-errors", bpo::bool_switch()->default_value(false),
@@ -803,6 +852,7 @@ class http_plugin_impl : public std::enable_shared_from_this<http_plugin_impl> {
                      "http-threads ${num} must be greater than 0", ("num", my->thread_pool_size));
 
          my->max_bytes_in_flight = options.at( "http-max-bytes-in-flight-mb" ).as<uint32_t>() * 1024 * 1024;
+         my->max_requests_in_flight = options.at( "http-max-in-flight-requests" ).as<int32_t>();
          my->max_response_time = fc::microseconds( options.at("http-max-response-time-ms").as<uint32_t>() * 1000 );
 
          //watch out for the returns above when adding new code here
