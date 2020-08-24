@@ -136,7 +136,7 @@ namespace eosio {
          virtual bool verify_max_requests_in_flight() = 0;
          virtual void handle_exception() = 0;
 
-         virtual void update_connection(const std::string & body, int code) = 0;
+         virtual void send_response(std::string body, int code) = 0;
       };
 
       using abstract_conn_ptr = std::shared_ptr<abstract_conn>;
@@ -418,8 +418,8 @@ class http_plugin_impl : public std::enable_shared_from_this<http_plugin_impl> {
                http_plugin_impl::handle_exception<T>(_conn);
             }
 
-            void update_connection(const std::string & body, int code) override {
-               _conn->set_body(body);
+            void send_response(std::string body, int code) override {
+               _conn->set_body(std::move(body));
                _conn->set_status( websocketpp::http::status_code::value( code ) );
                _conn->send_http_response();
             }
