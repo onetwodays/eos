@@ -136,8 +136,7 @@ namespace eosio {
          virtual bool verify_max_requests_in_flight() = 0;
          virtual void handle_exception() = 0;
 
-         virtual const void* operator* () const = 0;
-         virtual void* operator* () = 0;
+         virtual void update_connection(const std::string & body, int code) = 0;
       };
 
       using abstract_conn_ptr = std::shared_ptr<abstract_conn>;
@@ -338,7 +337,7 @@ class http_plugin_impl : public std::enable_shared_from_this<http_plugin_impl> {
          }
 
          template<typename T>
-         void report_429_error( const T& con, string what) {
+         void report_429_error( const T& con, const std::string & what) {
             error_results::error_info ei;
             ei.code = websocketpp::http::status_code::too_many_requests;
             ei.name = "Busy";
@@ -419,20 +418,10 @@ class http_plugin_impl : public std::enable_shared_from_this<http_plugin_impl> {
                http_plugin_impl::handle_exception<T>(_conn);
             }
 
-            /**
-             * const accessor
-             * @return const reference to the contained _conn
-             */
-            const void* operator* () const override {
-               return (const void *) &_conn;
-            }
-
-            /**
-             * mutable accessor (can be moved frmo)
-             * @return mutable reference to the contained _conn
-             */
-            void* operator* () override {
-               return (void *) &_conn;
+            void update_connection(const std::string & body, int code) override {
+               _conn->set_body(std::move(body));
+               _conn->set_status( websocketpp::http::status_code::value( code ) );
+               _conn->send_http_response();
             }
 
             detail::connection_ptr<T> _conn;
