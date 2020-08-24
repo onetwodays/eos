@@ -419,7 +419,7 @@ class http_plugin_impl : public std::enable_shared_from_this<http_plugin_impl> {
             }
 
             void update_connection(const std::string & body, int code) override {
-               _conn->set_body(std::move(body));
+               _conn->set_body(body);
                _conn->set_status( websocketpp::http::status_code::value( code ) );
                _conn->send_http_response();
             }
