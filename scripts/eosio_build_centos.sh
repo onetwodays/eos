@@ -34,7 +34,16 @@ fi
 fi
 
 if [[ "$(echo ${VERSION} | sed 's/ .*//g')" == 8 ]]; then
-        echo "Install Development Tools ..."
+
+	echo "Install Development Tools ..."
+	sudo yum update -y && \
+    	sudo yum install -y epel-release  && \
+    	sudo yum --enablerepo=extras install -y which git autoconf automake libtool make bzip2 && \
+    	sudo yum --enablerepo=extras install -y  graphviz bzip2-devel openssl-devel gmp-devel  && \
+    	sudo yum --enablerepo=extras install -y  file libusbx-devel && \
+    	sudo yum --enablerepo=extras install -y libcurl-devel patch vim-common jq && \
+    	sudo yum install -y python3 python3-devel clang llvm-devel llvm-static procps-ng util-linux sudo libstdc++
+       
         install-package https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
         group-install-package 'Development Tools'
         install-package openssl-devel
