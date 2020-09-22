@@ -35,7 +35,19 @@ fi
 
 if [[ "$(echo ${VERSION} | sed 's/ .*//g')" == 8 ]]; then
 
-	echo "Install Development Tools ..."
+	echo "Install Development Tools for CENTOS 8..."
+	ensure-scl
+	# GCC8 for Centos / Needed for CMAKE install even if we're pinning
+	ensure-devtoolset
+	if [[ -d /opt/rh/devtoolset-8 ]]; then
+	echo "${COLOR_CYAN}[Enabling Centos devtoolset-8 (so we can use GCC 8)]${COLOR_NC}"
+	execute-always source /opt/rh/devtoolset-8/enable
+	echo " - ${COLOR_GREEN}Centos devtoolset-8 successfully enabled!${COLOR_NC}"
+	fi
+	# Ensure packages exist
+	ensure-yum-packages "${REPO_ROOT}/scripts/eosio_build_centos7_deps"
+	export PYTHON3PATH="/opt/rh/rh-python36"
+	
 	sudo yum update -y && \
     	sudo yum install -y epel-release  && \
     	sudo yum --enablerepo=extras install -y which git autoconf automake libtool make bzip2 && \
@@ -47,6 +59,7 @@ if [[ "$(echo ${VERSION} | sed 's/ .*//g')" == 8 ]]; then
         install-package https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
         group-install-package 'Development Tools'
         install-package openssl-devel
+	export PYTHON3PATH="/opt/rh/rh-python36"
 fi
 
 # Handle clang/compiler
