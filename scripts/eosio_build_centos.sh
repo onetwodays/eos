@@ -41,7 +41,7 @@ if [[ "$(echo ${VERSION} | sed 's/ .*//g')" == 8 ]]; then
     	sudo yum --enablerepo=extras install -y which git autoconf automake libtool make bzip2 && \
     	sudo yum --enablerepo=extras install -y  graphviz bzip2-devel openssl-devel gmp-devel  && \
     	sudo yum --enablerepo=extras install -y  file libusbx-devel && \
-    	sudo yum --enablerepo=extras install -y libcurl-devel patch vim-common jq && \
+    	sudo yum --enablerepo=extras install -y libcurl-devel patch vim-common jq llvm-toolset-8.0-llvm-devel rh-python36 && \
     	sudo yum install -y python3 python3-devel clang llvm-devel llvm-static procps-ng util-linux sudo libstdc++
        
         install-package https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
