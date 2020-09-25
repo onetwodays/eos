@@ -1,7 +1,8 @@
 cmake_minimum_required( VERSION 3.8 )
 
 project( EOSIO )
-include(CTest) # suppresses DartConfiguration.tcl error
+message(status,"===============主master beg==============")
+include(CTest) # suppresses(压制) DartConfiguration.tcl error
 enable_testing()
 
 if ("${CMAKE_INSTALL_PREFIX}" STREQUAL "/usr/local")
@@ -10,13 +11,15 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 
+
+
 if (UNIX AND APPLE)
    list(APPEND CMAKE_PREFIX_PATH "/usr/local/opt/gettext")
 endif()
-
-include( GNUInstallDirs )
-include( InstallDirectoryPermissions )
-include( MASSigning )
+#include Load and run CMake code from a file or module.
+include( GNUInstallDirs ) #Define GNU standard installation directories  https://cmake.org/cmake/help/v3.0/module/GNUInstallDirs.html
+include( InstallDirectoryPermissions ) # locate ${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules
+include( MASSigning ) # locate ${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules
 
 set( BLOCKCHAIN_NAME "EOSIO" )
 set( CMAKE_CXX_STANDARD 17 )
@@ -187,6 +190,10 @@ install(FILES ${CMAKE_BINARY_DIR}/modules/eosio-config.cmake DESTINATION ${CMAKE
 configure_file(${CMAKE_SOURCE_DIR}/CMakeModules/EosioTester.cmake.in ${CMAKE_BINARY_DIR}/modules/EosioTester.cmake @ONLY)
 install(FILES ${CMAKE_BINARY_DIR}/modules/EosioTester.cmake DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/eosio)
 
+#configure_file 的作用是让普通文件也能使用CMake中的变量。
+#拷贝一个 <input>（输入文件） 文件到 <output> （输出文件），并且替换输入文件中被 @VAR@ 或者 ${VAR} 引用的变量值。
+#每一个变量将被替换成当前的变量值（注：CMake中的变量值）或者空串当变量未定义
+#只拷贝文件，不进行任何的变量替换。这个选项在指定了 NEWLINE_STYLE 选项时不能使用（无效）
 configure_file(${CMAKE_SOURCE_DIR}/LICENSE
                ${CMAKE_BINARY_DIR}/licenses/eosio/LICENSE COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/libraries/wabt/LICENSE
@@ -223,7 +230,24 @@ add_custom_target(base-install
 )
 
 get_property(_CTEST_CUSTOM_TESTS_IGNORE GLOBAL PROPERTY CTEST_CUSTOM_TESTS_IGNORE)
+
+#file(WRITE <filename> <content>...)
+#将content的内容写入filename中，假如文件不存在则会创建文件,假如filename中包含路径，则相应的文件夹也会被创建。WRITE会擦出文件内容，重新写入content，APPEND会在文件末尾追加内容
 file(WRITE "${CMAKE_BINARY_DIR}/CTestCustom.cmake" "SET(CTEST_CUSTOM_TESTS_IGNORE ${_CTEST_CUSTOM_TESTS_IGNORE})")
 
 include(package)
 include(doxygen)
+
+
+message(status,"aCMAKE_INSTALL_FULL_DATAROOTDIR=${CMAKE_INSTALL_FULL_DATAROOTDIR}")
+message(status,"CMAKE_INSTALL_FULL_SYSCONFDIR=${CMAKE_INSTALL_FULL_SYSCONFDIR}")
+message(status,"CMAKE_CURRENT_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}")
+message(status,"CMAKE_SOURCE_DIR=${CMAKE_SOURCE_DIR}")
+message(status,"CMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}")
+message(status,"CMAKE_MODULE_PATH=${CMAKE_MODULE_PATH}")
+
+message( status,"master PLATFORM_SPECIFIC_LIBS= ${PLATFORM_SPECIFIC_LIBS}")
+message( status,"master CMAKE_DL_LIBS = ${CMAKE_DL_LIBS}")
+message( status,"master CMAKE_CXX_FLAGS = ${CMAKE_CXX_FLAGS}")
+
+message(status,"===============主master end==============")
